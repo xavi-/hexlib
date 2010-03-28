@@ -455,7 +455,8 @@ var Grid = hex.create(hex.evented, {
 	defaults: {
 		
 		// Type of grid to construct.
-		type: "hexagonal"
+		type: "hexagonal",
+		enabled: true
 		
 	},
 	
@@ -546,7 +547,8 @@ hex.extend(hex, {
 		
 		// Handler for any mouse movement events
 		function mousemove(event) {
-			
+			if(!g.enabled) { return; }
+            
 			var
 				// Determine whether the event happened inside the bounds of the grid element
 				inside = event.inside(elem),
@@ -647,6 +649,7 @@ hex.extend(hex, {
 		
 		// Handler for any mouse button events
 		function mousebutton(event) {
+			if(!g.enabled) { return; }
 			
 			// Short-circuit if the event happened outside the bounds of the grid element.
 			if (!event.inside(elem)) return;
