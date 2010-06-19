@@ -1,13 +1,7 @@
 /**
  * hex.grid.js
  */
-(function(){
-
-var
-	undefined,
-	window = this,
-	document = window.document,
-	hex = window.hex;
+(function(hex, undefined){
 
 /**
  * The Grid prototype.
@@ -21,7 +15,9 @@ var Grid = hex.create(hex.evented, {
 		
 		// Type of grid to construct.
 		type: "hexagonal",
-		enabled: true
+		
+		// Threshold for tiletap event (ms)
+		tapthreshold: 400
 		
 	},
 	
@@ -56,7 +52,7 @@ hex.extend(hex, {
 		}
 		
 		// Combine options to default values
-		var options = hex.extend({}, Grid.defaults, options);
+		options = hex.extend({}, Grid.defaults, options);
 		
 		// Check that the particular grid type provides all reqired functions
 		if (hex.grid[options.type] === undefined) {
@@ -130,39 +126,36 @@ hex.extend(hex, {
 				if (pan.enabled && inside) {
 					var
 						px = pos.x - pan.x,
-						py = pos.y - pan.y
+						py = pos.y - pan.y;
 					root.style.left = px + "px";
 					root.style.top = py + "px";
 					elem.style.backgroundPosition = px + "px " + py + "px";
+					g.trigger("panmove", mousepos.x - pan.x - 2 * g.origin.x, mousepos.y - pan.y - 2 * g.origin.y);
 				}
 				return;
 			}
-			
-			// Short-circuit if there are no tile or grid events
-			if (
-				!g.events.tileover &&
-				!g.events.tileout &&
-				!g.events.gridover &&
-				!g.events.gridout
-			) return;
 			
 			var
 				tileover = g.events.tileover,
 				tileout = g.events.tileout,
 				gridover = g.events.gridover,
-				gridout = g.events.gridout,
+				gridout = g.events.gridout;
+			
+			// Short-circuit if there are no tile or grid events
+			if (!tileover && !tileout && !gridover && !gridout) {
+				return;
+			}
+			
+			var
 				
 				// Determine the grid-centric coordinates of the latest actioned tile
-				mousepos = event.mousepos(elem),
-				pos = {
-					x: mousepos.x - g.origin.x,
-					y: mousepos.y - g.origin.y
-				}
 				trans = g.translate(pos.x, pos.y);
 			
 			// Short-circuit if we're inside and there's nothing to do
 			// NOTE: For example, on a mouseout or mouseover where the mousemove already covered it
-			if (inside && lastTile.x === trans.x && lastTile.y === trans.y) return;
+			if (inside && lastTile.x === trans.x && lastTile.y === trans.y) {
+				return;
+			}
 			
 			// Queue up tileout callbacks if there are any
 			if (tileout && lastTile.x !== null && lastTile.y !== null) {
@@ -205,6 +198,13 @@ hex.extend(hex, {
 		hex.addEvent(elem, "mousemove", mousemove);
 		hex.addEvent(elem, "mouseover", mousemove);
 		hex.addEvent(elem, "mouseout", mousemove);
+		hex.addEvent(elem, "touchmove", mousemove);
+		hex.addEvent(elem, "touchstart", mousemove);
+		hex.addEvent(elem, "touchend", mousemove);
+		hex.addEvent(elem, "MozTouchDown", mousemove);
+		hex.addEvent(elem, "MozTouchMove", mousemove);
+		hex.addEvent(elem, "MozTouchUp", mousemove);
+		hex.addEvent(elem, "MozTouchRelease", mousemove);
 		
 		// Keep track of last tile mousedown'ed on
 		var downTile = {
@@ -212,36 +212,76 @@ hex.extend(hex, {
 			y: null
 		};
 		
+		// Keep track of when the last tiledown event happened
+		var downTime = null;
+		
 		// Handler for any mouse button events
 		function mousebutton(event) {
 			if(!g.enabled) { return; }
 			
 			// Short-circuit if the event happened outside the bounds of the grid element.
-			if (!event.inside(elem)) return;
+			if (!event.inside(elem)) {
+				return;
+			}
 			
-			// Prevent the default event action
-			// NOTE: This prevents/disables browser-native dragging of child elements
-			event.preventDefault();
+			// Determine the event type and coordinates
+			var
+				type = event.type,
+				mousepos = event.mousepos(elem);
 			
-			// Determine the mouse event coordinates
-			var mousepos = event.mousepos(elem);
+			// Prevents browser-native dragging of child elements (ex: dragging an image)
+			if (type === "mouseup" || type === "mousedown") {
+				event.preventDefault();
+			}
+			
+			// prevent touch-hold-copy behavior
+			// also allows multi-touch gestures (like pinch-zoom) to occur unabaited
+			if (type === "touchstart") {
+				if (!event.touches || event.touches.length < 2) {
+					event.preventDefault();
+				}
+			}
 			
 			// Begin panning
-			if (!pan.panning && event.type === "mousedown") {
+			if (!pan.panning && (
+				type === "mousedown" ||
+				type === "touchstart" ||
+				type === "MozTouchDown"
+			)) {
 				pan.panning = true;
-				pan.x = mousepos.x - g.origin.x - g.origin.x;
-				pan.y = mousepos.y - g.origin.y - g.origin.y;
+				pan.x = mousepos.x - 2 * g.origin.x;
+				pan.y = mousepos.y - 2 * g.origin.y;
 				elem.style.cursor = "move";
+				g.queue("panstart");
 			}
 			
 			// Cease panning
-			if (pan.panning && event.type === "mouseup") {
+			if (pan.panning && (
+				type === "mouseup" ||
+				type === "touchend" ||
+				type === "MozTouchUp" ||
+				type === "MozTouchRelease"
+			)) {
+				
+				// cancel tiletap if mouse has moved too far
+				var
+					diffx = mousepos.x - 2 * g.origin.x - pan.x,
+					diffy = mousepos.y - 2 * g.origin.y - pan.y;
+				diffx = diffx < 0 ? -diffx : diffx;
+				diffy = diffy < 0 ? -diffy : diffy;
+				if (diffx > g.tileWidth || diffy > g.tileHeight) {
+					downTime = null;
+				}
+				
+				// reorient if panning is still enabled
 				if (pan.enabled) {
+					g.queue("panend", mousepos.x - pan.x - 2 * g.origin.x, mousepos.y - pan.y - 2 * g.origin.y);
 					g.reorient(
 						mousepos.x - g.origin.x - pan.x,
 						mousepos.y - g.origin.y - pan.y
 					);
 				}
+				
 				pan.enabled = true;
 				pan.panning = false;
 				pan.x = null;
@@ -249,8 +289,17 @@ hex.extend(hex, {
 				elem.style.cursor = "";
 			}
 			
-			// Short-circuit if there are no tiledown, tileup or tileclick event handlers
-			if (!g.events.tiledown && !g.events.tileup && !g.events.tileclick) return;
+			var
+				tiledown = g.events.tiledown,
+				tileup = g.events.tileup,
+				tileclick = g.events.tileclick,
+				tiletap = g.events.tiletap;
+			
+			// Short-circuit if there are no tiledown, tileup, tileclick or tiletap event handlers
+			if (!tiledown && !tileup && !tileclick && !tiletap) {
+				g.fire();
+				return;
+			}
 			
 			var
 				// Adjusted mouse position
@@ -260,17 +309,19 @@ hex.extend(hex, {
 				},
 				
 				// Grid-centric coordinates of the latest actioned tile
-				trans = g.translate(pos.x, pos.y),
-				
-				tiledown = g.events.tiledown,
-				tileup = g.events.tileup,
-				tileclick = g.events.tileclick;
+				trans = g.translate(pos.x, pos.y);
 			
-			if (event.type === "mousedown") {
+			if (
+				type === "mousedown" ||
+				type === "touchstart" ||
+				type === "MozTouchDown"
+			) {
+				
+				downTime = +new Date();
 				
 				// Queue up tiledown callbacks
 				if (tiledown) {
-					var res = g.trigger("tiledown", trans.x, trans.y);
+					var res = g.queue("tiledown", trans.x, trans.y);
 					if (res && res.prevented) {
 						pan.enabled = false;
 					}
@@ -280,46 +331,66 @@ hex.extend(hex, {
 				downTile.x = trans.x;
 				downTile.y = trans.y;
 				
-			} else if (event.type === "mouseup") {
+			} else if (
+				type === "mouseup" ||
+				type === "touchend" ||
+				type === "MozTouchUp" ||
+				type === "MozTouchRelease"
+			) {
 				
 				// Queue up tileup callbacks
 				if (tileup) {
 					g.queue("tileup", trans.x, trans.y);
 				}
 				
-				// Queue up tileclick callbacks
-				if (tileclick && downTile.x === trans.x && downTile.y === trans.y) {
-					g.queue("tileclick", trans.x, trans.y);
+				// Queue up tileclick and tiletap callbacks
+				if (downTile.x === trans.x && downTile.y === trans.y) {
+					if (tileclick) {
+						g.queue("tileclick", trans.x, trans.y);
+					}
+					if (tiletap && downTime && (+new Date()) - downTime < g.tapthreshold) {
+						g.queue("tiletap", trans.x, trans.y);
+					}
 				}
 				
 				// Clear mousedown target
 				downTile.x = null;
 				downTile.y = null;
 				
-				// Fire off queued events
-				g.fire();
-			
+				// Clear tiledown time
+				downTime = null;
+				
 			}
+			
+			// Fire off any queued events
+			g.fire();
 			
 		}
 		
 		// Add DOM event handlers to grid element for mouse movement
 		hex.addEvent(elem, "mousedown", mousebutton);
 		hex.addEvent(elem, "mouseup", mousebutton);
+		hex.addEvent(elem, "touchstart", mousebutton);
+		hex.addEvent(elem, "touchend", mousebutton);
+		hex.addEvent(elem, "MozTouchDown", mousemove);
+		hex.addEvent(elem, "MozTouchUp", mousemove);
+		hex.addEvent(elem, "MozTouchRelease", mousemove);
 		
 		// A mouseup event anywhere on the document outside the grid element while panning should:
 		// * cease panning,
 		// * fire a gridout event, and
 		// * clear the mousedown and lasttile targets
-		hex.addEvent(document, "mouseup", function(event){
+		function mouseup(event) {
 			
 			// We only care about the mouseup event if the user was panning
-			if (!pan.panning) return;
+			if (!pan.panning) {
+				return;
+			}
 			
 			// Reorient the board, and cease panning
 			g.reorient(
-				parseInt( root.style.left ),
-				parseInt( root.style.top )
+				parseInt(root.style.left, 10),
+				parseInt(root.style.top, 10)
 			);
 			pan.panning = false;
 			pan.x = null;
@@ -337,10 +408,50 @@ hex.extend(hex, {
 			lastTile.x = null;
 			lastTile.y = null;
 			
+			// Clear tiledown time
+			downTime = null;
+			
 			// Fire off queued events
 			g.fire();
 			
-		});
+		}
+		hex.addEvent(document, "mouseup", mouseup);
+		hex.addEvent(document, "touchend", mouseup);
+		hex.addEvent(document, "gesturestart", mouseup);
+		hex.addEvent(document, "gesturechange", mouseup);
+		hex.addEvent(document, "gestureend", mouseup);
+		hex.addEvent(document, "MozTouchUp", mouseup);
+		hex.addEvent(document, "MozTouchRelease", mouseup);
+		
+		// A mousewheel event should be captured, and then reorient up or down the height of a tile
+		// @see http://www.switchonthecode.com/tutorials/javascript-tutorial-the-scroll-wheel
+		function mousewheel(event) {
+			
+			// short-circuit if the ctrl key is being pressed (zoom)
+			if (event.ctrlKey) {
+				return;
+			}
+			
+			var
+				// did the event happen inside the bounds of the grid element?
+				inside = event.inside(elem),
+				
+				// was it up or down?
+				wheelData = event.detail ? event.detail * -1 : event.wheelDelta * 0.025,
+				direction = wheelData > 0 ? 1 : wheelData < 0 ? -1 : 0;
+			
+			// scroll it
+			if (inside && direction) {
+				event.preventDefault();
+				if (event.wheelDeltaX || event.axis && event.axis === event.HORIZONTAL_AXIS) {
+					g.reorient(g.origin.x + g.tileWidth * direction, g.origin.y);
+				} else {
+					g.reorient(g.origin.x, g.origin.y + g.tileHeight * direction);
+				}
+			}
+		}
+		hex.addEvent(elem, "mousewheel", mousewheel);
+		hex.addEvent(elem, "DOMMouseScroll", mousewheel);
 		
 		// Perform initialization if grid supports it
 		if (g.init) {
@@ -352,4 +463,5 @@ hex.extend(hex, {
 	
 });
 
-})();
+})(window.hex);
+

@@ -1,13 +1,10 @@
 /**
  * hex.grid.triangular.js
  */
-(function(){
+(function(hex, undefined){
 
 var
-	undefined,
-	window = this,
-	floor = Math.floor,
-	hex = window.hex;
+	floor = Math.floor;
 
 /**
  * The triangular grid prototype.
@@ -77,8 +74,10 @@ hex.grid.triangular = {
 	 * @return An object with an x and y property, mapping to the geometry appropriate coordinates of the grid.
 	 */
 	translate: function translate( x, y ) {
+		
 		x = x - this.offset.x;
 		y = y - this.offset.y;
+		
 		var
 			c = this.coefficient,
 			x1 = c * ( x * this.e2.y - y * this.e2.x ),
@@ -86,12 +85,14 @@ hex.grid.triangular = {
 			x2 = floor( x1 ),
 			y2 = floor( y1 ),
 			xd = ( x1 + y1 - x2 - y2 > 1 ? 1 : 0 );
+		
 		return {
 			x: x2 * 2.0 + xd,
 			y: y2
 		};
+		
 	}
 	
 };
 
-})();
+})(window.hex);

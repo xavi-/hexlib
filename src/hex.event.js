@@ -2,14 +2,10 @@
  * hex.event.js
  * Library methods for DOM and non-DOM events.
  */
-(function(){
+(function(hex, undefined){
 
 var
-	undefined,
-	window = this,
-	document = window.document,
-	slice = Array.prototype.slice,
-	hex = window.hex;
+	slice = Array.prototype.slice;
 
 /**
  * The rich event prototype for non-DOM (hex) events.
@@ -32,9 +28,14 @@ hex.extend(hex, {
 		 * @return this.
 		 */
 		addEvent: function addEvent( type, handler ) {
-			if (!this.events) this.events = {};
-			if (this.events[type] === undefined) this.events[type] = [];
-			this.events[type].push(handler);
+			if (!this.events) {
+				this.events = {};
+			}
+			var handlers = this.events[type];
+			if (handlers === undefined) {
+				handlers = this.events[type] = [];
+			}
+			handlers[handlers.length] = handler;
 			return this;
 		},
 		
@@ -46,7 +47,11 @@ hex.extend(hex, {
 		 * @return An object containing information about the callback execution, or false if there was nothing to do.
 		 */
 		trigger: function trigger( type /*, args ... */ ) {
-			if (!this.events || !this.events[type]) return false;
+			
+			if (!this.events || !this.events[type]) {
+				return false;
+			}
+			
 			var
 				timeout = 10,
 				handlers = this.events[type],
@@ -61,6 +66,7 @@ hex.extend(hex, {
 					}
 				}),
 				errors = [];
+			
 			while (i<l) {
 				try {
 					while (i<l) {
@@ -73,12 +79,14 @@ hex.extend(hex, {
 					}, timeout++);
 				}
 			}
+			
 			return {
 				event: e,
 				errors: errors,
 				prevented: prevented,
 				args: args
 			};
+			
 		},
 		
 		/**
@@ -88,7 +96,9 @@ hex.extend(hex, {
 		 */
 		queue: function queue( type /*, args ... */ ) {
 			var q = this.eventqueue;
-			if (!q) q = this.eventqueue = [];
+			if (!q) {
+				q = this.eventqueue = [];
+			}
 			q[q.length] = slice.call(arguments, 0);
 		},
 		
@@ -97,7 +107,9 @@ hex.extend(hex, {
 		 */
 		fire: function fire() {
 			var q = this.eventqueue;
-			if (!q || !q.length) return;
+			if (!q || !q.length) {
+				return;
+			}
 			while (q.length) {
 				this.trigger.apply(this, q.shift());
 			}
@@ -118,7 +130,9 @@ var DOMEvent = {
 	 */
 	getTarget: function getTarget() {
 		var t = this.target || this.srcElement;
-		if (!t) return undefined;
+		if (!t) {
+			return undefined;
+		}
 		return ( t.nodeType === 3 ? t.parentNode : t );
 	},
 	
@@ -128,6 +142,7 @@ var DOMEvent = {
 	 * @return Object with an x and y property for the screen location in pixels.
 	 */
 	inside: function inside( elem ) {
+		
 		// Details about the event coordinates and location/size of the element 
 		var
 			pos = this.mousepos(),
@@ -141,31 +156,50 @@ var DOMEvent = {
 			pos.y > position.y &&
 			pos.y < position.y + size.y
 		);
+		
 	},
 	
 	/**
 	 * Determine the screen coordinates for a mouse event (click, mouseover, etc).
 	 * @see http://www.quirksmode.org/js/events_properties.html#position
+	 * @see http://developer.apple.com/safari/library/documentation/appleapplications/reference/safariwebcontent/handlingevents/handlingevents.html
 	 * @param elem DOM element for relative position calculation (optional).
 	 * @return Object with an x and y property for the screen location in pixels.
 	 */
 	mousepos: function mousepos( elem ) {
+		
 		var
+			touch,
 			x = 0,
 			y = 0;
-		if (this.pageX !== undefined && this.pageY !== undefined) {
+		
+		if (this.touches && this.touches.length) {
+			touch = this.touches[0];
+			x = touch.pageX;
+			y = touch.pageY;
+		} else if (this.changedTouches && this.changedTouches.length) {
+			touch = this.changedTouches[0];
+			x = touch.pageX;
+			y = touch.pageY;
+		} else if (this.pageX !== undefined && this.pageY !== undefined) {
 			x = this.pageX;
 			y = this.pageY;
 		} else if (this.clientX !== undefined && this.clientY !== undefined) {
 			x = this.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
 			y = this.clientY + document.body.scrollTop + document.documentElement.scrollTop;
 		}
+		
 		if (elem) {
 			var pos = hex.position(elem);
 			x = x - pos.x;
 			y = y - pos.y;
 		}
-		return { x: x, y: y };
+		
+		return {
+			x: x,
+			y: y
+		};
+		
 	},
 	
 	/**
@@ -178,16 +212,30 @@ var DOMEvent = {
 		} else {
 			e.returnValue = false;
 		}
+	},
+	
+	/**
+	 * Stop the event from propagating.
+	 */
+	stopPropagation: function stopPropagation() {
+		var e = this.event;
+		if (e.stopPropagation) {
+			e.stopPropagation();
+		} else {
+			e.cancelBubble = true;
+		}
 	}
 	
 };
+
+var Handler;
 
 if (document.addEventListener) {
 	
 	/**
 	 * The Handler prototype.
 	 */
-	var Handler = {
+	Handler = {
 		
 		/**
 		 * Remove the handler from the object to which it was previously attached.
@@ -238,7 +286,7 @@ if (document.addEventListener) {
 	/**
 	 * The Handler prototype.
 	 */
-	var Handler = {
+	Handler = {
 		
 		/**
 		 * Remove the handler from the object to which it was previously attached.
@@ -259,22 +307,27 @@ if (document.addEventListener) {
 		 * @return Handler instance .
 		 */
 		addEvent: function addEvent( elem, type, handler ) {
+			
 			function callback() {
 				var e = window.event;
 				return handler.call(elem, hex.extend({}, e, DOMEvent, { event: e }));
 			}
+			
 			function remove(){
 				elem.detachEvent("on" + type, callback);
 				window.detachEvent("onunload", remove);
 			}
+			
 			elem.attachEvent("on" + type, callback);
 			window.attachEvent("onunload", remove);
+			
 			return hex.create(Handler, {
 				callback: callback,
 				elem: elem,
 				handler: handler,
 				type: type
 			});
+			
 		},
 		
 		/**
@@ -291,4 +344,5 @@ if (document.addEventListener) {
 	
 }
 
-})();
+})(window.hex);
+
