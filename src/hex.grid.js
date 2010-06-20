@@ -322,7 +322,8 @@ hex.extend(hex, {
 				
 				downTime = +new Date();
 				
-				// Queue up tiledown callbacks
+				// Trigger tiledown callbacks
+				// Note: Can't use queue here since we need to find out if preventDefault() has been called
 				if (tiledown) {
 					var res = g.trigger("tiledown", trans.x, trans.y);
 					if (res && res.prevented) {
