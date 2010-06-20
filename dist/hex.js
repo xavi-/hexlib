@@ -6,7 +6,7 @@
  * Licensed under the MIT license.
  * http://hexlib.com/license
  *
- * Date: Sat Jun 19 15:11:12 2010 -0400
+ * Date: Sat Jun 19 15:32:00 2010 -0400
  */
 (function( window, document, undefined ) {
 /**
@@ -523,7 +523,8 @@ var Grid = hex.create(hex.evented, {
 		
 		// Type of grid to construct.
 		type: "hexagonal",
-		
+		// Whether or not the grid is accepting events
+		enabled: true,
 		// Threshold for tiletap event (ms)
 		tapthreshold: 400
 		
@@ -829,7 +830,7 @@ hex.extend(hex, {
 				
 				// Queue up tiledown callbacks
 				if (tiledown) {
-					var res = g.queue("tiledown", trans.x, trans.y);
+					var res = g.trigger("tiledown", trans.x, trans.y);
 					if (res && res.prevented) {
 						pan.enabled = false;
 					}
@@ -934,6 +935,7 @@ hex.extend(hex, {
 		// A mousewheel event should be captured, and then reorient up or down the height of a tile
 		// @see http://www.switchonthecode.com/tutorials/javascript-tutorial-the-scroll-wheel
 		function mousewheel(event) {
+		    if(!g.enabled) { return; }
 			
 			// short-circuit if the ctrl key is being pressed (zoom)
 			if (event.ctrlKey) {
@@ -971,9 +973,7 @@ hex.extend(hex, {
 	
 });
 
-})(window.hex);
-
-/**
+})(window.hex);/**
  * hex.grid.hexagonal.js
  */
 (function(hex, undefined){

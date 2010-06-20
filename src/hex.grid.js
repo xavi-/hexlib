@@ -16,6 +16,9 @@ var Grid = hex.create(hex.evented, {
 		// Type of grid to construct.
 		type: "hexagonal",
 		
+		// Whether or not the grid is accepting events
+		enabled: true,
+		
 		// Threshold for tiletap event (ms)
 		tapthreshold: 400
 		
@@ -426,6 +429,7 @@ hex.extend(hex, {
 		// A mousewheel event should be captured, and then reorient up or down the height of a tile
 		// @see http://www.switchonthecode.com/tutorials/javascript-tutorial-the-scroll-wheel
 		function mousewheel(event) {
+		    if(!g.enabled) { return; }
 			
 			// short-circuit if the ctrl key is being pressed (zoom)
 			if (event.ctrlKey) {
@@ -464,4 +468,3 @@ hex.extend(hex, {
 });
 
 })(window.hex);
-
