@@ -6,7 +6,7 @@
  * Licensed under the MIT license.
  * http://hexlib.com/license
  *
- * Date: Sat Jun 19 15:32:00 2010 -0400
+ * Date: Sun Jun 20 12:14:25 2010 -0400
  */
 (function( window, document, undefined ) {
 /**
@@ -523,8 +523,10 @@ var Grid = hex.create(hex.evented, {
 		
 		// Type of grid to construct.
 		type: "hexagonal",
+		
 		// Whether or not the grid is accepting events
 		enabled: true,
+		
 		// Threshold for tiletap event (ms)
 		tapthreshold: 400
 		

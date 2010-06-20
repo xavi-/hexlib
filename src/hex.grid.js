@@ -324,7 +324,7 @@ hex.extend(hex, {
 				
 				// Queue up tiledown callbacks
 				if (tiledown) {
-					var res = g.queue("tiledown", trans.x, trans.y);
+					var res = g.trigger("tiledown", trans.x, trans.y);
 					if (res && res.prevented) {
 						pan.enabled = false;
 					}
